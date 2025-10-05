@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Vault — Device Files</title>
+<style>
+  :root{--bg:#0b132b;--panel:#0f1b3f;--muted:#a7bed3;--accent:#57e2ff;--chip:#1b2b62}
+  html,body{margin:0;background:linear-gradient(180deg,var(--bg),#081225);color:#e6f6ff;font-family:Inter,system-ui,Arial}
+  .wrap{max-width:1200px;margin:20px auto;padding:0 14px}
+  h1{font-size:24px;margin:0 0 4px}
+  .muted{color:var(--muted)}
+  .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}
+  .btn{background:linear-gradient(90deg,var(--accent),#9b7cff);border:0;padding:8px 12px;border-radius:8px;color:#031;cursor:pointer;font-weight:700}
+  .input,.select{padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:#0c1840;color:#e6f6ff}
+  .device{margin:18px 0 10px;padding:10px 12px;border-radius:12px;background:#0f1b3f;border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;gap:10px}
+  .badge{background:var(--chip);padding:4px 8px;border-radius:999px;font-size:12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin-bottom:8px}
+  .card{background:var(--panel);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px}
+  .row{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--muted)}
+  .file{font-size:14px;word-break:break-all}
+  .kind{background:rgba(255,255,255,0.08);padding:2px 6px;border-radius:999px;font-size:11px}
+  .download{align-self:flex-start}
+  footer{margin:18px 0;color:var(--muted);font-size:13px}
+  .gate{margin:24px auto;max-width:520px}
+</style>
+</head>
+<body>
+
+<!-- Auth view -->
+<div class="wrap gate" id="authView" style="display:none">
+  <h1>Sign in</h1>
+  <p class="muted">Use your email & password.</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">
+    <input id="email" class="input" placeholder="Email" type="email" style="flex:1 1 220px">
+    <input id="password" class="input" placeholder="Password" type="password" style="flex:1 1 180px">
+    <button class="btn" id="signin">Sign in</button>
+  </div>
+  <p class="muted">No account? <a id="signup" href="#">Sign up</a></p>
+</div>
+
+<!-- App view -->
+<div class="wrap" id="appView" style="display:none">
+  <h1>Vault — Device Files</h1>
+  <div class="muted">Bucket: <span id="bucketName" class="badge">vault</span></div>
+
+  <div class="controls">
+    <button class="btn" id="refresh">Refresh</button>
+    <button class="btn" id="signout">Sign out</button>
+    <input class="input" id="search" placeholder="Search filename…" />
+    <select class="select" id="kind">
+      <option value="">All kinds</option>
+      <option>image</option><option>video</option><option>audio</option>
+      <option>txt</option><option>py</option><option>html</option>
+      <option>doc</option><option>sheet</option><option>data</option>
+      <option>config</option><option>code</option><option>archive</option>
+      <option>package</option><option>design</option><option>screens</option>
+      <option>other</option>
+    </select>
+    <select class="select" id="sort">
+      <option value="newest">Newest first</option>
+      <option value="oldest">Oldest first</option>
+      <option value="nameAZ">Name A→Z</option>
+      <option value="nameZA">Name Z→A</option>
+    </select>
+    <div style="flex:1"></div>
+    <div class="muted" id="count">Loading…</div>
+  </div>
+
+  <div id="devices"></div>
+
+  <footer>Files are grouped by the device that uploaded them. Click “Refresh” after you run the CLI.</footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ===== EDIT THESE TWO ===== */
+const SUPABASE_URL = "https://uoyxsxefowfcpvmksufi.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVveXhzeGVmb3dmY3B2bWtzdWZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2Nzk1NzksImV4cCI6MjA3NTI1NTU3OX0.PHSCjm9qVIM7mbMXTVEfdPf0zr0lbzqV4kc411fKxGY";
+/* ========================== */
+
+const BUCKET = "vault";
+const USE_SIGNED_URLS = true;  // private bucket
+const SIGNED_URL_EXPIRES = 3600;
+
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+document.getElementById('bucketName').textContent = BUCKET;
+
+const authView = document.getElementById('authView');
+const appView  = document.getElementById('appView');
+
+async function checkSession() {
+  const { data: { session } } = await client.auth.getSession();
+  authView.style.display = session ? 'none' : 'block';
+  appView.style.display  = session ? 'block' : 'none';
+  if (session) reload();
+}
+
+document.getElementById('signin').onclick = async () => {
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  const { error } = await client.auth.signInWithPassword({ email, password });
+  if (error) alert(error.message);
+  else checkSession();
+};
+
+document.getElementById('signup').onclick = async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  const { error } = await client.auth.signUp({ email, password });
+  if (error) alert(error.message);
+  else alert('Check your email to confirm your account, then sign in.');
+};
+
+document.getElementById('signout').onclick = async () => {
+  await client.auth.signOut();
+  checkSession();
+};
+
+client.auth.onAuthStateChange(() => checkSession());
+checkSession();
+
+let all = [];
+
+function groupByDevice(rows){
+  const map = {};
+  for (const r of rows){
+    const d = r.device_name || "Unknown Device";
+    (map[d] ||= []).push(r);
+  }
+  return map;
+}
+
+function applyFilterSort(rows){
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const k = document.getElementById('kind').value;
+  let arr = rows.filter(r => (!k || r.kind === k) && (!q || (r.filename||'').toLowerCase().includes(q)));
+  const sort = document.getElementById('sort').value;
+  if (sort === 'newest') arr.sort((a,b)=> new Date(b.added_ts) - new Date(a.added_ts));
+  if (sort === 'oldest') arr.sort((a,b)=> new Date(a.added_ts) - new Date(b.added_ts));
+  if (sort === 'nameAZ') arr.sort((a,b)=> (a.filename||'').localeCompare(b.filename||''));
+  if (sort === 'nameZA') arr.sort((a,b)=> (b.filename||'').localeCompare(a.filename||''));
+  return arr;
+}
+
+async function fetchFiles(){
+  const { data, error } = await client
+    .from('files')
+    .select('id, filename, storage_path, kind, device_name, added_ts')
+    .order('added_ts', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+async function urlFor(path){
+  const storage = client.storage.from(BUCKET);
+  if (!USE_SIGNED_URLS) {
+    const { data } = storage.getPublicUrl(path);
+    return data.publicUrl;
+  } else {
+    const { data, error } = await storage.createSignedUrl(path, SIGNED_URL_EXPIRES);
+    if (error) throw error;
+    return data.signedUrl;
+  }
+}
+
+async function render(){
+  const container = document.getElementById('devices');
+  container.innerHTML = '';
+
+  const rows = applyFilterSort(all);
+  document.getElementById('count').textContent = `${rows.length} file${rows.length!==1?'s':''}`;
+
+  const groups = groupByDevice(rows);
+  const devices = Object.keys(groups).sort((a,b)=> a.localeCompare(b));
+
+  if (devices.length === 0) {
+    container.innerHTML = '<div class="muted">No files match your filters.</div>';
+    return;
+  }
+
+  for (const dev of devices){
+    const banner = document.createElement('div');
+    banner.className = 'device';
+    banner.innerHTML = `<div style="font-weight:700">${dev}</div><div class="badge">${groups[dev].length} item(s)</div>`;
+    container.appendChild(banner);
+
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+    container.appendChild(grid);
+
+    for (const r of groups[dev]){
+      const card = document.createElement('div');
+      card.className = 'card';
+
+      const top = document.createElement('div');
+      top.className = 'file';
+      top.textContent = r.filename;
+
+      const meta = document.createElement('div');
+      meta.className = 'row';
+      const left = document.createElement('div');
+      left.innerHTML = `<span class="kind">${r.kind}</span>`;
+      const right = document.createElement('div');
+      right.textContent = new Date(r.added_ts).toLocaleString();
+      meta.appendChild(left); meta.appendChild(right);
+
+      const dl = document.createElement('a');
+      dl.className = 'btn download';
+      dl.textContent = 'Download';
+      dl.setAttribute('download', r.filename || 'file');
+
+      try {
+        const u = await urlFor(r.storage_path);
+        dl.href = u;
+      } catch (e) {
+        dl.textContent = 'Link error';
+      }
+
+      card.appendChild(top);
+      card.appendChild(meta);
+      card.appendChild(dl);
+      grid.appendChild(card);
+    }
+  }
+}
+
+async function reload(){
+  document.getElementById('devices').innerHTML = '<div class="muted">Loading…</div>';
+  all = await fetchFiles();
+  render();
+}
+
+document.getElementById('refresh').addEventListener('click', reload);
+document.getElementById('search').addEventListener('input', render);
+document.getElementById('kind').addEventListener('change', render);
+document.getElementById('sort').addEventListener('change', render);
+</script>
+</body>
+</html>
