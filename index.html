@@ -1,241 +1,298 @@
 <!doctype html>
-<html lang="en">
+<html>
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Vault — Device Files</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hooker — JSON-driven DOM scraper</title>
 <style>
-  :root{--bg:#0b132b;--panel:#0f1b3f;--muted:#a7bed3;--accent:#57e2ff;--chip:#1b2b62}
-  html,body{margin:0;background:linear-gradient(180deg,var(--bg),#081225);color:#e6f6ff;font-family:Inter,system-ui,Arial}
-  .wrap{max-width:1200px;margin:20px auto;padding:0 14px}
-  h1{font-size:24px;margin:0 0 4px}
-  .muted{color:var(--muted)}
-  .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}
-  .btn{background:linear-gradient(90deg,var(--accent),#9b7cff);border:0;padding:8px 12px;border-radius:8px;color:#031;cursor:pointer;font-weight:700}
-  .input,.select{padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:#0c1840;color:#e6f6ff}
-  .device{margin:18px 0 10px;padding:10px 12px;border-radius:12px;background:#0f1b3f;border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;gap:10px}
-  .badge{background:var(--chip);padding:4px 8px;border-radius:999px;font-size:12px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin-bottom:8px}
-  .card{background:var(--panel);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px}
-  .row{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--muted)}
-  .file{font-size:14px;word-break:break-all}
-  .kind{background:rgba(255,255,255,0.08);padding:2px 6px;border-radius:999px;font-size:11px}
-  .download{align-self:flex-start}
-  footer{margin:18px 0;color:var(--muted);font-size:13px}
-  .gate{margin:24px auto;max-width:520px}
+  body{font-family:Inter,system-ui,Arial;background:#0b132b;color:#e6f6ff;margin:0;padding:18px}
+  .panel{max-width:980px;margin:0 auto;background:#0f1b3f;padding:18px;border-radius:12px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}
+  .btn{background:linear-gradient(90deg,#57e2ff,#9b7cff);color:#051;border:0;padding:10px 14px;border-radius:10px;font-weight:800;cursor:pointer}
+  .ghost{background:#0c1840;border:1px solid rgba(255,255,255,.1);color:#e6f6ff}
+  .pill{background:#10265c;padding:6px 10px;border-radius:999px}
+  pre{background:#0c1840;padding:12px;border-radius:10px;max-height:420px;overflow:auto;white-space:pre-wrap}
+  input{background:#07102a;color:#e6f6ff;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px}
 </style>
 </head>
 <body>
+<div class="panel">
+  <h1>Hooker — JSON-driven DOM scraper</h1>
 
-<!-- Auth view -->
-<div class="wrap gate" id="authView" style="display:none">
-  <h1>Sign in</h1>
-  <p class="muted">Use your email & password.</p>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">
-    <input id="email" class="input" placeholder="Email" type="email" style="flex:1 1 220px">
-    <input id="password" class="input" placeholder="Password" type="password" style="flex:1 1 180px">
+  <div class="row">
     <button class="btn" id="signin">Sign in</button>
-  </div>
-  <p class="muted">No account? <a id="signup" href="#">Sign up</a></p>
-</div>
-
-<!-- App view -->
-<div class="wrap" id="appView" style="display:none">
-  <h1>Vault — Device Files</h1>
-  <div class="muted">Bucket: <span id="bucketName" class="badge">vault</span></div>
-
-  <div class="controls">
-    <button class="btn" id="refresh">Refresh</button>
-    <button class="btn" id="signout">Sign out</button>
-    <input class="input" id="search" placeholder="Search filename…" />
-    <select class="select" id="kind">
-      <option value="">All kinds</option>
-      <option>image</option><option>video</option><option>audio</option>
-      <option>txt</option><option>py</option><option>html</option>
-      <option>doc</option><option>sheet</option><option>data</option>
-      <option>config</option><option>code</option><option>archive</option>
-      <option>package</option><option>design</option><option>screens</option>
-      <option>other</option>
-    </select>
-    <select class="select" id="sort">
-      <option value="newest">Newest first</option>
-      <option value="oldest">Oldest first</option>
-      <option value="nameAZ">Name A→Z</option>
-      <option value="nameZA">Name Z→A</option>
-    </select>
-    <div style="flex:1"></div>
-    <div class="muted" id="count">Loading…</div>
+    <button class="btn ghost" id="reloadCfg">Reload ./SCRAPE_HOOK.json</button>
   </div>
 
-  <div id="devices"></div>
+  <div class="row">
+    <span class="pill" id="dev">device: —</span>
+    <span class="pill" id="kinds">kinds: —</span>
+    <span class="pill" id="mode">mode: —</span>
+    <span class="pill" id="quota">quota: —</span>
+  </div>
 
-  <footer>Files are grouped by the device that uploaded them. Click “Refresh” after you run the CLI.</footer>
+  <div class="row">
+    <input id="deviceOverride" placeholder="Device name (override)">
+    <input id="labelOverride"  placeholder="Session label (optional)">
+  </div>
+
+  <div class="row">
+    <button class="btn" id="preview">Preview</button>
+    <button class="btn" id="run">CLICK ME — Hook now</button>
+  </div>
+
+  <h3>Log</h3>
+  <pre id="out">1) Sign in  2) Reload config  3) Preview  4) Click</pre>
 </div>
 
+<!-- SUPABASE -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-/* ===== EDIT THESE TWO ===== */
-const SUPABASE_URL = "https://uoyxsxefowfcpvmksufi.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVveXhzeGVmb3dmY3B2bWtzdWZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2Nzk1NzksImV4cCI6MjA3NTI1NTU3OX0.PHSCjm9qVIM7mbMXTVEfdPf0zr0lbzqV4kc411fKxGY";
-/* ========================== */
-
+/* ===== EDIT YOUR SUPABASE PROJECT ===== */
+const SUPABASE_URL = "https://fumhhcjeyrytplcjvatp.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ1bWhoY2pleXJ5dHBsY2p2YXRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3NTc3MDcsImV4cCI6MjA3NTMzMzcwN30.oPcVTzcc_5-gGVxx84q3pueYZOpwcghxAOyuL1STacY";
 const BUCKET = "vault";
-const USE_SIGNED_URLS = true;  // private bucket
-const SIGNED_URL_EXPIRES = 3600;
+/* ====================================== */
 
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-document.getElementById('bucketName').textContent = BUCKET;
 
-const authView = document.getElementById('authView');
-const appView  = document.getElementById('appView');
+let CFG = null; // parsed SCRAPE_HOOK.json
 
-async function checkSession() {
-  const { data: { session } } = await client.auth.getSession();
-  authView.style.display = session ? 'none' : 'block';
-  appView.style.display  = session ? 'block' : 'none';
-  if (session) reload();
+// ---------- small helpers ----------
+function log(s){ const el = document.getElementById('out'); el.textContent += "\n"+s; }
+async function ensureAuth(){
+  const s = (await client.auth.getSession()).data.session;
+  if (s) return s;
+  const email = prompt("Enter email for magic link:");
+  if (!email) throw new Error("No email");
+  const { error } = await client.auth.signInWithOtp({ email });
+  if (error) throw error;
+  alert("Click the magic link, then return and press OK.");
+  return (await client.auth.getSession()).data.session;
 }
-
-document.getElementById('signin').onclick = async () => {
-  const email = document.getElementById('email').value.trim();
-  const password = document.getElementById('password').value;
-  const { error } = await client.auth.signInWithPassword({ email, password });
-  if (error) alert(error.message);
-  else checkSession();
-};
-
-document.getElementById('signup').onclick = async (e) => {
-  e.preventDefault();
-  const email = document.getElementById('email').value.trim();
-  const password = document.getElementById('password').value;
-  const { error } = await client.auth.signUp({ email, password });
-  if (error) alert(error.message);
-  else alert('Check your email to confirm your account, then sign in.');
-};
-
-document.getElementById('signout').onclick = async () => {
-  await client.auth.signOut();
-  checkSession();
-};
-
-client.auth.onAuthStateChange(() => checkSession());
-checkSession();
-
-let all = [];
-
-function groupByDevice(rows){
-  const map = {};
-  for (const r of rows){
-    const d = r.device_name || "Unknown Device";
-    (map[d] ||= []).push(r);
+function shaHex(buf){
+  return crypto.subtle.digest("SHA-256", buf).then(h=>Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,'0')).join(''));
+}
+function nowLabel(){
+  const d=new Date();
+  const mm=d.toLocaleString(undefined,{month:'short'}), dd=String(d.getDate()).padStart(2,"0"),
+        yyyy=d.getFullYear(), hh=String(d.getHours()).padStart(2,"0"),
+        mi=String(d.getMinutes()).padStart(2,"0"), ss=String(d.getSeconds()).padStart(2,"0");
+  return `${mm}. ${dd} ${yyyy} @ ${hh}-${mi}-${ss}`;
+}
+function setPills(){
+  dev.textContent   = "device: " + (CFG?.device_name||"—");
+  kinds.textContent = "kinds: "  + ((CFG?.kinds||[]).join(", ")||"—");
+  mode.textContent  = "mode: "   + (CFG?.mode||"—");
+  let q = (CFG?.quota_kind||"—"); if (q==="COUNT") q += " " + (CFG?.quota_count??"");
+  quota.textContent = "quota: "  + q;
+}
+// ---------- DOM collectors (this page only, same-origin fetch) ----------
+async function collectImages(){
+  const list=[...document.images];
+  const out=[];
+  for(const img of list){
+    const src = img.currentSrc || img.src;
+    if(!src) continue;
+    try{
+      const r = await fetch(src, {credentials:"same-origin", mode:"cors"});
+      if(!r.ok) throw new Error(r.status);
+      const b = await r.blob();
+      out.push({ kind:"image", name:(new URL(src, location.href)).pathname.split("/").pop()||"image", blob:b });
+    }catch{ /* cross-origin or blocked -> skip */ }
   }
-  return map;
+  return out;
 }
+async function collectVideos(){
+  const vids=[...document.querySelectorAll("video")];
+  const out=[];
+  for(const v of vids){
+    const src = v.currentSrc || (v.querySelector("source")?.src);
+    if(!src) continue;
+    try{
+      const r = await fetch(src, {credentials:"same-origin", mode:"cors"});
+      if(!r.ok) throw new Error(r.status);
+      const b = await r.blob();
+      out.push({ kind:"video", name:(new URL(src, location.href)).pathname.split("/").pop()||"video", blob:b });
+    }catch{}
+  }
+  return out;
+}
+async function collectTxt(){
+  const text = document.body.innerText || "";
+  return [{ kind:"txt", name:"page.txt", blob: new Blob([text], {type:"text/plain"}) }];
+}
+async function collectPy(){
+  const blocks=[...document.querySelectorAll('code.language-python, pre code.lang-py, pre code.language-py')];
+  const code = blocks.map(b=>b.textContent).join("\n\n");
+  if(!code) return [];
+  return [{ kind:"py", name:"code.py", blob: new Blob([code], {type:"text/x-python"}) }];
+}
+async function collectHtml(){
+  const html = document.documentElement.outerHTML;
+  return [{ kind:"html", name:"page.html", blob: new Blob([html], {type:"text/html"}) }];
+}
+const COLLECTORS = { image:collectImages, video:collectVideos, txt:collectTxt, py:collectPy, html:collectHtml };
 
-function applyFilterSort(rows){
-  const q = document.getElementById('search').value.trim().toLowerCase();
-  const k = document.getElementById('kind').value;
-  let arr = rows.filter(r => (!k || r.kind === k) && (!q || (r.filename||'').toLowerCase().includes(q)));
-  const sort = document.getElementById('sort').value;
-  if (sort === 'newest') arr.sort((a,b)=> new Date(b.added_ts) - new Date(a.added_ts));
-  if (sort === 'oldest') arr.sort((a,b)=> new Date(a.added_ts) - new Date(b.added_ts));
-  if (sort === 'nameAZ') arr.sort((a,b)=> (a.filename||'').localeCompare(b.filename||''));
-  if (sort === 'nameZA') arr.sort((a,b)=> (b.filename||'').localeCompare(a.filename||''));
+// ---------- selection (mode + quota) PER KIND ----------
+function applyModeAndQuota(items, mode, quota_kind, quota_count){
+  let arr=[...items];
+  if (mode==="RECENT"){
+    // No real mtime for DOM resources → keep natural order (top-to-bottom)
+  }else{
+    for(let i=arr.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [arr[i],arr[j]]=[arr[j],arr[i]]; }
+  }
+  if (quota_kind==="COUNT" && quota_count>0) arr=arr.slice(0,quota_count);
   return arr;
 }
 
-async function fetchFiles(){
-  const { data, error } = await client
-    .from('files')
-    .select('id, filename, storage_path, kind, device_name, added_ts')
-    .order('added_ts', { ascending: false });
-  if (error) throw error;
-  return data || [];
-}
-
-async function urlFor(path){
-  const storage = client.storage.from(BUCKET);
-  if (!USE_SIGNED_URLS) {
-    const { data } = storage.getPublicUrl(path);
-    return data.publicUrl;
-  } else {
-    const { data, error } = await storage.createSignedUrl(path, SIGNED_URL_EXPIRES);
-    if (error) throw error;
-    return data.signedUrl;
-  }
-}
-
-async function render(){
-  const container = document.getElementById('devices');
-  container.innerHTML = '';
-
-  const rows = applyFilterSort(all);
-  document.getElementById('count').textContent = `${rows.length} file${rows.length!==1?'s':''}`;
-
-  const groups = groupByDevice(rows);
-  const devices = Object.keys(groups).sort((a,b)=> a.localeCompare(b));
-
-  if (devices.length === 0) {
-    container.innerHTML = '<div class="muted">No files match your filters.</div>';
-    return;
-  }
-
-  for (const dev of devices){
-    const banner = document.createElement('div');
-    banner.className = 'device';
-    banner.innerHTML = `<div style="font-weight:700">${dev}</div><div class="badge">${groups[dev].length} item(s)</div>`;
-    container.appendChild(banner);
-
-    const grid = document.createElement('div');
-    grid.className = 'grid';
-    container.appendChild(grid);
-
-    for (const r of groups[dev]){
-      const card = document.createElement('div');
-      card.className = 'card';
-
-      const top = document.createElement('div');
-      top.className = 'file';
-      top.textContent = r.filename;
-
-      const meta = document.createElement('div');
-      meta.className = 'row';
-      const left = document.createElement('div');
-      left.innerHTML = `<span class="kind">${r.kind}</span>`;
-      const right = document.createElement('div');
-      right.textContent = new Date(r.added_ts).toLocaleString();
-      meta.appendChild(left); meta.appendChild(right);
-
-      const dl = document.createElement('a');
-      dl.className = 'btn download';
-      dl.textContent = 'Download';
-      dl.setAttribute('download', r.filename || 'file');
-
-      try {
-        const u = await urlFor(r.storage_path);
-        dl.href = u;
-      } catch (e) {
-        dl.textContent = 'Link error';
-      }
-
-      card.appendChild(top);
-      card.appendChild(meta);
-      card.appendChild(dl);
-      grid.appendChild(card);
+// ---------- PREVIEW ----------
+document.getElementById('preview').onclick = async ()=>{
+  try{
+    if(!CFG) throw new Error("Load ./SCRAPE_HOOK.json first");
+    const want = new Set(CFG.kinds||[]);
+    const preview = {};
+    for(const k of want){
+      if(!COLLECTORS[k]) continue;
+      const all = await COLLECTORS[k]();                       // full list of that kind
+      preview[k] = applyModeAndQuota(all, CFG.mode, CFG.quota_kind, CFG.quota_count).map(x=>x.name);
     }
-  }
-}
+    document.getElementById('out').textContent = JSON.stringify({ok:true, preview}, null, 2);
+  }catch(e){ log("Preview error: "+(e.message||e)); }
+};
 
-async function reload(){
-  document.getElementById('devices').innerHTML = '<div class="muted">Loading…</div>';
-  all = await fetchFiles();
-  render();
-}
+// ---------- RUN ----------
+document.getElementById('run').onclick = async ()=>{
+  try{
+    await ensureAuth();
+    if(!CFG) throw new Error("Load ./SCRAPE_HOOK.json first");
+    const want = new Set(CFG.kinds||[]);
+    const device = (document.getElementById('deviceOverride').value.trim() || CFG.device_name || "Unknown Device");
+    const label  = (document.getElementById('labelOverride').value.trim() || CFG.label_override || nowLabel());
 
-document.getElementById('refresh').addEventListener('click', reload);
-document.getElementById('search').addEventListener('input', render);
-document.getElementById('kind').addEventListener('change', render);
-document.getElementById('sort').addEventListener('change', render);
+    // create session row
+    const { data: srows, error: serr } = await client.from('sessions').insert([{
+      device_name: device, label, mode: CFG.mode, quota_kind: CFG.quota_kind,
+      quota_count: CFG.quota_count, kinds: [...want]
+    }]).select();
+    if (serr) throw serr;
+    const session_id = srows[0].id;
+
+    const by_kind = {};
+    let processed=0, uploaded=0, skipped=0, errors=0;
+    const t0 = performance.now();
+
+    for (const k of want){
+      if(!COLLECTORS[k]) continue;
+      const all = await COLLECTORS[k]();
+      const chosen = applyModeAndQuota(all, CFG.mode, CFG.quota_kind, CFG.quota_count);
+      by_kind[k] = { total: chosen.length, uploaded: 0, skipped: 0, errors: 0 };
+      for(const item of chosen){
+        processed++;
+        try{
+          const buf = await item.blob.arrayBuffer();
+          const sha = await shaHex(buf);
+          // dedupe by sha256
+          const { data: exists, error: selErr } = await client.from('files').select('id').eq('sha256', sha).limit(1);
+          if (selErr) throw selErr;
+          if (exists && exists.length){ skipped++; by_kind[k].skipped++; continue; }
+
+          const ext = item.name.includes(".") ? item.name.slice(item.name.lastIndexOf(".")) : ".bin";
+          const folder = {
+            image:"Images", video:"Videos", audio:"Audio", txt:"Text", py:"Python", html:"HTML",
+            doc:"Documents", sheet:"Sheets", data:"Data", code:"Code", archive:"Archives",
+            screens:"Screenshots", other:"Other"
+          }[k] || "Other";
+          const storage_path = `HOOK/${device}/${label}/${folder}/${sha}${ext}`;
+          // upload blob
+          const { error: upErr } = await client.storage.from(BUCKET).upload(storage_path, item.blob, { upsert:false, contentType: item.blob.type || 'application/octet-stream' });
+          if (upErr) throw upErr;
+          // record row
+          const { error: insErr } = await client.from('files').insert({
+            filename: item.name, storage_path, sha256: sha, mime: item.blob.type||null, kind: k, device_name: device, session_id
+          });
+          if (insErr) throw insErr;
+          uploaded++; by_kind[k].uploaded++;
+        }catch(e){
+          errors++; by_kind[k].errors++; console.error(e);
+        }
+      }
+    }
+
+    const elapsed = (performance.now()-t0)/1000;
+    const summary =
+`==============================
+📊 SCRAPE SUMMARY REPORT
+==============================
+
+🖥️  DEVICE & SESSION DETAILS
+────────────────────────────
+Name:           ${device}
+Mode:           ${CFG.mode}
+User Agent:     ${navigator.userAgent}
+Start Time:     ${new Date(Date.now()-elapsed*1000).toLocaleString()}
+Duration:       ${elapsed.toFixed(2)}s
+Files/Second:   ${(processed/elapsed||0).toFixed(2)}
+
+📂 CATEGORY BREAKDOWN
+──────────────────────
+Kind        Total  Uploaded  Skipped  Errors  Quota Limit
+----        -----  --------  -------  ------- -----------
+${Object.keys(by_kind).sort().map(k=>{
+  const b=by_kind[k]; const q = (CFG.quota_kind==="COUNT") ? (CFG.quota_count||0) : "∞";
+  return `${k.padEnd(10)}${String(b.total).padStart(7)}${String(b.uploaded).padStart(11)}${String(b.skipped).padStart(9)}${String(b.errors).padStart(9)}${String(q).padStart(12)}`;
+}).join("\n")}
+──────────────────────
+TOTAL       ${String(processed).padStart(7)}${String(uploaded).padStart(11)}${String(skipped).padStart(9)}${String(errors).padStart(9)}
+
+📈 PERFORMANCE METRICS
+──────────────────────
+Uploaded:       ${processed?((uploaded/processed*100).toFixed(2)):"0.00"}%
+Skipped:        ${processed?((skipped/processed*100).toFixed(2)):"0.00"}% (dedupe)
+Errors:         ${processed?((errors/processed*100).toFixed(2)):"0.00"}%
+
+🕒 COMPLETION STATUS
+──────────────────────
+${errors? "Completed with issues — see above." : "All uploads were successful 🎉"}
+`;
+
+    await client.storage.from(BUCKET).upload(`HOOK/${device}/${label}/SUMMARY.txt`, new Blob([summary], {type:'text/plain'}));
+    await client.from('sessions').update({
+      totals: { processed, uploaded, skipped, errors, by_kind },
+      duration_seconds: Math.round(elapsed*100)/100
+    }).eq('id', session_id);
+
+    document.getElementById('out').textContent = JSON.stringify({
+      ok:true, session_id, device, label, processed, uploaded, skipped, errors, by_kind
+    }, null, 2);
+  }catch(e){ log("Run error: "+(e.message||e)); }
+};
+
+// ---------- load config on open ----------
+async function loadCfg(){
+  try{
+    const r = await fetch("./SCRAPE_HOOK.json", {cache:"no-store"});
+    if(!r.ok) throw new Error(r.status+" "+r.statusText);
+    CFG = await r.json();
+    setPills();
+    log("Loaded ./SCRAPE_HOOK.json");
+  }catch(e){ log("Config load error: "+(e.message||e)); }
+}
+document.getElementById('reloadCfg').onclick = loadCfg;
+document.getElementById('signin').onclick   = async ()=>{ try{ await ensureAuth(); log("Signed in ✔"); }catch(e){ log(e.message||e); } };
+window.addEventListener('load', loadCfg);
 </script>
+
+<!-- Content below is just to have something to scrape for demo -->
+<hr style="margin:24px 0; opacity:.25">
+<div style="max-width:980px;margin:0 auto;color:#a7bed3">
+  <h3>Demo content on this page</h3>
+  <p>Some text for the <b>txt</b> kind.</p>
+  <img src="https://picsum.photos/seed/abc/400/250" alt="">
+  <video controls width="400">
+    <source src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" type="video/mp4">
+  </video>
+  <pre><code class="language-python">print("hello from code block")</code></pre>
+</div>
 </body>
 </html>
