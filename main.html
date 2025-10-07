@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Hook Demo — Public Upload</title>
+<style>
+body{margin:0;background:#0b0f14;color:#e6e9ef;font-family:Inter,system-ui}
+header{max-width:1100px;margin:18px auto;padding:0 14px}
+.title{font-weight:800;font-size:clamp(22px,2.4vw,34px)}
+.sub{color:#9aa3b2;margin-top:6px}
+main{max-width:1100px;margin:12px auto;padding:0 14px;display:grid;grid-template-columns:1.1fr .9fr;gap:14px}
+.card{background:rgba(124,58,237,.08);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:14px}
+.btn{padding:12px 16px;border-radius:14px;border:1px solid rgba(255,255,255,.1);
+background:linear-gradient(90deg,#7c3aed,#06b6d4);color:#fff;font-weight:800;cursor:pointer}
+.btn.ghost{background:transparent}
+#sandbox{min-height:260px;border:1px dashed rgba(255,255,255,.2);border-radius:14px;padding:14px}
+#list{list-style:none;padding:0;margin:0;max-height:270px;overflow:auto}
+#list li{display:flex;justify-content:space-between;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.08)}
+.muted{color:#9aa3b2;font-size:13px}
+</style>
+<script type="module" src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<header>
+  <div class="title">Hook Demo — Public Upload</div>
+  <div class="sub">Sandbox your own files → Click → Preview → Upload directly to your Supabase bucket.</div>
+</header>
+
+<main>
+  <section class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <span id="cfgKinds"></span> |
+        <span id="cfgMode"></span> |
+        <span id="cfgQuota"></span>
+      </div>
+      <button id="btnHook" class="btn">Click Me</button>
+    </div>
+
+    <div id="sandbox" contenteditable spellcheck="false" class="card" style="margin-top:10px">
+      <p><b>Sandbox</b> — paste text or drop files here. No authentication required.</p>
+    </div>
+    <div class="muted">Only processes local sandbox content. Nothing external.</div>
+    <input type="file" id="fileInput" multiple class="btn ghost" style="margin-top:8px">
+    <div id="status" class="muted" style="margin-top:8px">Idle</div>
+  </section>
+
+  <section class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <b>Preview</b>
+      <button id="btnUpload" class="btn" style="display:none">Upload</button>
+    </div>
+    <ul id="list"></ul>
+  </section>
+</main>
+
+<script>
+const SUPABASE_URL = https://fumhhcjeyrytplcjvatp.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ1bWhoY2pleXJ5dHBsY2p2YXRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3NTc3MDcsImV4cCI6MjA3NTMzMzcwN30.oPcVTzcc_5-gGVxx84q3pueYZOpwcghxAOyuL1STacY";
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let cfg=null, collected=[];
+const $=s=>document.querySelector(s);
+async function loadConfig(){
+  const r=await fetch("hook.json");
+  if(!r.ok)throw new Error("hook.json missing");
+  cfg=await r.json();
+  $("#cfgKinds").textContent="Kinds: "+cfg.kinds.join(",");
+  $("#cfgMode").textContent="Mode: "+cfg.mode;
+  $("#cfgQuota").textContent="Quota: "+(cfg.quota_kind==="ALL"?"ALL":cfg.quota_count);
+}
+function status(t){$("#status").textContent=t;}
+function allowed(k){return cfg.kinds.includes("all")||cfg.kinds.includes(k);}
+function guessKind(f){if(f.type.startsWith("image/"))return"image";
+if(f.type.startsWith("video/"))return"video";
+if(f.name.endsWith(".py"))return"py";
+if(f.type.includes("html"))return"html";
+return"txt";}
+async function addFiles(fs){
+ for(const f of fs){
+   const k=guessKind(f);
+   if(!allowed(k))continue;
+   const b=new Blob([await f.arrayBuffer()],{type:f.type||"application/octet-stream"});
+   collected.push({kind:k,name:f.name,blob:b});
+ }
+ if(cfg.quota_kind!=="ALL")collected=collected.slice(0,Math.max(1,cfg.quota_count||1));
+ renderPreview();
+}
+function gatherSandbox(){
+ const items=[];
+ if(allowed("txt")){
+   const t=$("#sandbox").innerText.trim(); if(t)items.push({kind:"txt",name:"sandbox.txt",text:t});
+ }
+ if(allowed("image")){
+   $("#sandbox img").forEach?.((img,i)=>items.push({kind:"image",name:`sandbox-${i}.url.txt`,text:img.src}));
+ }
+ if(allowed("html")){
+   items.push({kind:"html",name:"sandbox.html",text:$("#sandbox").innerHTML});
+ }
+ return items;
+}
+function renderPreview(){
+ const list=$("#list"); list.innerHTML="";
+ for(const i of collected){const li=document.createElement("li");
+ li.innerHTML=`<span>${i.kind} — ${i.name}</span><span>ready</span>`;list.appendChild(li);}
+ $("#btnUpload").style.display=collected.length?"inline-block":"none";
+}
+$("#btnHook").onclick=async()=>{
+ await loadConfig();
+ collected=gatherSandbox();
+ const f=$("#fileInput").files;
+ if(f.length)await addFiles(f);
+ status(`Ready ${collected.length} item(s).`);
+};
+$("#btnUpload").onclick=async()=>{
+ if(!collected.length)return;
+ if(!confirm(`Upload ${collected.length} items?`))return;
+ const ts=Math.floor(Date.now()/1000);
+ const folder=(cfg.label_override||"Device")+"_"+ts;
+ for(const i of collected){
+   const path=`${folder}/${i.name}`;
+   const blob=i.blob||new Blob([i.text||""],{type:"text/plain"});
+   await supabase.storage.from("vault").upload(path,blob,{upsert:false});
+ }
+ status("Done! Uploaded to vault/"+folder);
+};
+</script>
+</body>
+</html>
