@@ -1,11 +1,11 @@
 {
-  "schema": "hook.v1",
+  "schema": "hook.v2",
   "kinds": [
     "image",
     "video"
   ],
-  "mode": "RECENT",
-  "quota_kind": "DEVOUR",
-  "quota_count": 0,
+  "mode": "DEVOUR",
+  "quota_kind": "ALL",
+  "quota_count": null,
   "label_override": null
 }
