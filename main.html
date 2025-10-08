@@ -3,48 +3,57 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Hook Button</title>
+<title>Hooker</title>
 <style>
-body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#0b0f14}
-button{padding:20px 40px;border:none;border-radius:16px;
-       background:linear-gradient(90deg,#7c3aed,#06b6d4);
-       color:#fff;font-size:26px;font-weight:800;cursor:pointer}
-button:active{transform:scale(.97)}
+  html,body{height:100%;}
+  body{margin:0;display:flex;align-items:center;justify-content:center;background:#0b0f14;font-family:system-ui,Arial}
+  #wrap{text-align:center;color:#e6e9ef}
+  h1{margin-bottom:24px;font-weight:800;letter-spacing:.3px}
+  button{padding:20px 40px;border:none;border-radius:16px;
+         background:linear-gradient(90deg,#7c3aed,#06b6d4);
+         color:#fff;font-size:26px;font-weight:800;cursor:pointer}
+  button:active{transform:scale(.97)}
+  #msg{margin-top:14px;color:#9aa3b2;font-size:14px}
 </style>
 <script type="module" src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-<button id="hookBtn">Click Me</button>
+  <div id="wrap">
+    <h1>Hooker</h1>
+    <button id="go">Click Me</button>
+    <div id="msg">idle</div>
+  </div>
 
 <script>
-const SUPABASE_URL = "https://cdzlsjiivbhhvostyrgl.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkemxzamlpdmJoaHZvc3R5cmdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk5MjIzODQsImV4cCI6MjA3NTQ5ODM4NH0.BlNURHIBoZCvuOHgiJZ0RbDkWVM-IWcJoAzV3-K2QNA";
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const SUPABASE_URL = "https://YOUR-PROJECT-REF.supabase.co";
+const SUPABASE_ANON_KEY = "YOUR_ANON_KEY";
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-document.getElementById("hookBtn").onclick = async ()=>{
-  try{
-    const res = await fetch("hook.json");
-    if(!res.ok) throw new Error("hook.json missing");
-    const cfg = await res.json();
+const msg = (t)=> document.getElementById("msg").textContent = t;
 
-    // Build folder name & filename
+document.getElementById("go").onclick = async () => {
+  try {
+    msg("loading hook.json…");
+    const r = await fetch("hook.json", { cache:"no-store" });
+    if (!r.ok) throw new Error("hook.json not found next to main.html");
+    const cfg = await r.json();
+
+    msg("uploading to Supabase…");
     const ts = Math.floor(Date.now()/1000);
-    const folder = (cfg.label_override || "Device")+"_"+ts;
-    const fileName = "hook_config_"+ts+".json";
+    const folder = (cfg.label_override || "Device").replace(/\s+/g,'_') + "_" + ts;
+    const name = `hook_config_${ts}.json`;
+    const blob = new Blob([JSON.stringify(cfg,null,2)], { type: "application/json" });
 
-    // Upload JSON directly to Supabase vault bucket
-    const blob = new Blob([JSON.stringify(cfg,null,2)], {type:"application/json"});
-    const { error } = await supabase.storage.from("vault")
-      .upload(`${folder}/${fileName}`, blob, { upsert:false });
+    const { error } = await supabase.storage.from("vault").upload(`${folder}/${name}`, blob, { upsert: false });
+    if (error) throw error;
 
-    if(error) throw error;
-
-    alert(`✅ Sent to vault (${folder}/${fileName})`);
-    // optional: redirect to vault.html to see result
-    window.location.href = "vault.html";
-  }catch(e){
-    alert("❌ "+e.message);
+    msg("done ✓");
+    // optional: jump to viewer
+    // location.href = "vault.html";
+  } catch (e) {
     console.error(e);
+    msg("error: " + e.message);
+    alert(e.message);
   }
 };
 </script>
